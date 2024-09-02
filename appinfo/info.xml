@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+    <id>user_ispconfig_api</id>
+    <version>29.0.0</version>
+    <name>ISPConfig API Backend</name>
+    <summary>Allows users to sign in with their email or custom login name using the ISPConfig Control Panel API</summary>
+    <description lang="en"><![CDATA[This user and group backend requires the installation of a plugin in the ISPConfig control panel. Please see the documentation on the official site.]]></description>
+    <licence>agpl</licence>
+    <author mail="mepstein@live.cl" homepage="https://www.mediabox.cl">Michael Epstein</author>
+    <namespace>UserISPConfigAPI</namespace>
+    <category>integration</category>
+    <category>security</category>
+    <documentation>
+        <admin>https://git.mediabox.cl/Nextcloud/ISPConfig.git</admin>
+    </documentation>
+    <bugs>https://git.mediabox.cl/Nextcloud/ISPConfig.git</bugs>
+    <website>https://www.mediabox.cl</website>
+    <repository type="git">https://git.mediabox.cl/Nextcloud/ISPConfig.git</repository>
+    <dependencies>
+        <php min-version="8.0" max-version="8.3" />
+        <lib>soap</lib>
+        <nextcloud min-version="29" max-version="30"/>
+    </dependencies>
+    <types>
+        <authentication/>
+    </types>
+</info>
