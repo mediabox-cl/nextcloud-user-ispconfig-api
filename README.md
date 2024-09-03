@@ -13,6 +13,7 @@ This Backend allows users to sign in with their email or custom login name using
 - Auto create the **Nextcloud** user account.
 - Set the user email as system email in **Nextcloud**.
 - Set the user quota defined by User or Domain (fallback).
+- Users can change their **ISPConfig** password and display name in the **Nextcloud** interface.
 - ...
 
 ### Groups
