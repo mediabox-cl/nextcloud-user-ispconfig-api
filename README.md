@@ -48,6 +48,7 @@ Install it as usual from admin app list or CLI with:
 ```bash
 cd ..
 sudo -u www-data php occ app:install user_ispconfig_api
+sudo -u www-data php occ app:enable user_ispconfig_api
 ```
 ## Configuration
 
