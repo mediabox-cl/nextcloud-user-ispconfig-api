@@ -6,16 +6,16 @@
     <summary>Allows users to sign in with their email or custom login name using the ISPConfig Control Panel API</summary>
     <description lang="en"><![CDATA[This user and group backend requires the installation of a plugin in the ISPConfig control panel. Please see the documentation on the official site.]]></description>
     <licence>agpl</licence>
-    <author mail="mepstein@live.cl" homepage="https://www.mediabox.cl">Michael Epstein</author>
+    <author mail="mepstein@live.cl" homepage="https://github.com/mediabox-cl">Michael Epstein</author>
     <namespace>UserISPConfigAPI</namespace>
     <category>integration</category>
     <category>security</category>
     <documentation>
-        <admin>https://git.mediabox.cl/Nextcloud/ISPConfig.git</admin>
+        <admin>https://github.com/mediabox-cl/nextcloud-user-ispconfig-api</admin>
     </documentation>
-    <bugs>https://git.mediabox.cl/Nextcloud/ISPConfig.git</bugs>
-    <website>https://www.mediabox.cl</website>
-    <repository type="git">https://git.mediabox.cl/Nextcloud/ISPConfig.git</repository>
+    <bugs>https://github.com/mediabox-cl/nextcloud-user-ispconfig-api</bugs>
+    <website>https://github.com/mediabox-cl</website>
+    <repository type="git">https://github.com/mediabox-cl/nextcloud-user-ispconfig-api</repository>
     <dependencies>
         <php min-version="8.0" max-version="8.3" />
         <lib>soap</lib>
