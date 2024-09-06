@@ -41,8 +41,8 @@ Clone this repository into your **Nextcloud** apps directory:
 
 ```bash
 cd /var/www/nextcloud/site/apps/
-chown -R www-data:www-data user_ispconfig_api
 git clone https://github.com/mediabox-cl/nextcloud-user-ispconfig-api.git user_ispconfig_api
+chown -R www-data:www-data user_ispconfig_api
 ```
 Install it as usual from admin app list or CLI with:
 ```bash
