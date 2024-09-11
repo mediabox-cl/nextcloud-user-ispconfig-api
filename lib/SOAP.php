@@ -255,18 +255,22 @@ class SOAP
     /**
      * Update mail user from API
      *
-     * @param mixed $client_id Client ID (client_id)
-     * @param mixed $user_id Mail user ID (mailuser_id)
+     * @param mixed $sysUserid System User ID (sys_userid)
+     * @param mixed $mailUserid Mail user ID (mailuser_id)
      * @param array $data Data to be updated
      *
      * @return bool True if the record was modified, False otherwise
      */
-    public function updateMailUser(mixed $client_id, mixed $user_id, array $data): bool
+    public function updateMailUser(mixed $sysUserid, mixed $mailUserid, array $data): bool
     {
-        $client_id = (int) $client_id;
-        $user_id = (int) $user_id;
+        // We need to get the client ID from the sys_userid
+        $clientId = $this->getClientId($sysUserid);
 
-        return (bool) $this->run('mail_user_update', $client_id, $user_id, $data);
+        if ($clientId) {
+            return (bool) $this->run('mail_user_update', $clientId, (int) $mailUserid, $data);
+        }
+
+        return false;
     }
 
     /**

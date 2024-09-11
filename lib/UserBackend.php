@@ -30,6 +30,7 @@ use OC\AllConfig;
 
 use OCP\AppFramework\Db\TTransactional;
 use OCP\Cache\CappedMemoryCache;
+use OCP\DB\Exception;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\IDBConnection;
 use OCP\IGroup;
@@ -43,13 +44,15 @@ use OCP\User\Backend\ICheckPasswordBackend;
 use OCP\User\Backend\ICountUsersBackend;
 use OCP\User\Backend\IGetDisplayNameBackend;
 use OCP\User\Backend\IGetHomeBackend;
+use OCP\User\Backend\IGetRealUIDBackend;
 use OCP\User\Backend\ISearchKnownUsersBackend;
 use OCP\User\Backend\ISetDisplayNameBackend;
 use OCP\User\Backend\ISetPasswordBackend;
+use Psr\Log\LoggerInterface;
 
 /**
  * Custom class for User Backend.
- * This class don't implement the ICreateUserBackend and IGetRealUIDBackend.
+ * This class don't implement the ICreateUserBackend.
  */
 class UserBackend extends ABackend implements
     ISetPasswordBackend,
@@ -58,7 +61,8 @@ class UserBackend extends ABackend implements
     ICheckPasswordBackend,
     IGetHomeBackend,
     ICountUsersBackend,
-    ISearchKnownUsersBackend
+    ISearchKnownUsersBackend,
+    IGetRealUIDBackend
 {
     use TTransactional;
 
@@ -76,9 +80,13 @@ class UserBackend extends ABackend implements
      */
     private $cache;
     /**
-     * @var array
+     * @var string
      */
-    private $userData;
+    private $loginName;
+    /**
+     * @var null|bool
+     */
+    private $userData = null;
     /**
      * @var array
      */
@@ -98,7 +106,7 @@ class UserBackend extends ABackend implements
     /**
      * @var string
      */
-    private $mailUid;
+    private $uid;
 
     /**
      * @param SOAP $soap
@@ -107,6 +115,7 @@ class UserBackend extends ABackend implements
      * @param GroupBackend $groupBackend
      * @param IEventDispatcher $eventDispatcher
      * @param IDBConnection $db
+     * @param LoggerInterface $logger
      */
     public function __construct(
         private SOAP             $soap,
@@ -114,7 +123,8 @@ class UserBackend extends ABackend implements
         private IGroupManager    $groupManager,
         private GroupBackend     $groupBackend,
         private IEventDispatcher $eventDispatcher,
-        private IDBConnection    $db
+        private IDBConnection    $db,
+        private LoggerInterface  $logger
     )
     {
         $this->cache = new CappedMemoryCache();
@@ -134,7 +144,9 @@ class UserBackend extends ABackend implements
      */
     public function userExists($uid): bool
     {
+        $this->fixUID($uid);
         $this->loadUser($uid);
+
         return $this->cache[$uid] !== false;
     }
 
@@ -144,21 +156,21 @@ class UserBackend extends ABackend implements
      */
     public function checkPassword(string $loginName, string $password): bool|string
     {
-        // Set the user and domain data and validate user password
-        if (!$this->setUserData($loginName, $password)) {
+        // Load user
+        if (!$this->setUserData($loginName)) {
             return false;
         }
 
-        // Set server data and close the connection
-        if (!$this->setServerData(true)) {
+        // Validate password
+        if (!password_verify($password, $this->userData['password'])) {
             return false;
         }
 
         // Create a new user if don't exist
-        $newUser = $this->createUser($this->mailUid, $this->userData['name']);
+        $newUser = $this->createUser($this->uid, $this->userData['name']);
 
         // Process user data
-        $user = $this->userManager->get($this->mailUid);
+        $user = $this->userManager->get($this->uid);
 
         if (!($user instanceof IUser)) {
             return false;
@@ -234,7 +246,7 @@ class UserBackend extends ABackend implements
         }
 
         // User "belong" to this groups
-        $belongGroups = $this->groupBackend->getUserGroups($this->mailUid);
+        $belongGroups = $this->groupBackend->getUserGroups($this->uid);
         // "Missing" user groups (Add user to this groups)
         $missingGroups = array_diff($mustGroups, $belongGroups);
         // User "must not" belong to this groups (Remove user from this groups)
@@ -255,7 +267,7 @@ class UserBackend extends ABackend implements
             $add = isset($this->serverData['nc_add']) && $this->serverData['nc_add'] == 'y';
             if ($add) {
                 foreach ($missingGroups as $missingGroup) {
-                    $this->groupBackend->addToGroup($this->mailUid, $missingGroup);
+                    $this->groupBackend->addToGroup($this->uid, $missingGroup);
                 }
             }
         }
@@ -292,7 +304,7 @@ class UserBackend extends ABackend implements
                 $delete = isset($this->serverData['nc_delete']) && $this->serverData['nc_delete'] == 'y';
 
                 foreach ($extraGroups as $extraGroup) {
-                    $this->groupBackend->removeFromGroup($this->mailUid, $extraGroup);
+                    $this->groupBackend->removeFromGroup($this->uid, $extraGroup);
 
                     // Delete the groups
                     if ($delete) {
@@ -306,7 +318,7 @@ class UserBackend extends ABackend implements
 
         }
 
-        return (string) $this->cache[$this->mailUid]['uid'];
+        return (string) $this->cache[$this->uid]['uid'];
     }
 
     /**
@@ -322,7 +334,7 @@ class UserBackend extends ABackend implements
      */
     private function createUser(string $uid, string $displayName): bool
     {
-        if (!$this->userExists($uid) && !empty($this->userData)) {
+        if (!$this->userExists($uid)) {
             return $this->atomic(
                 function () use ($uid, $displayName) {
                     // Compute the user Name
@@ -365,125 +377,67 @@ class UserBackend extends ABackend implements
     /**
      * Query the API and set the user data
      *
-     * @param string $loginName
-     * @param string|null $password
-     * @param bool $close
+     * @param string $loginName User email or login name
+     * @param bool $close Close the SOAP connection
      *
      * @return bool
      */
-    private function setUserData(string $loginName, ?string $password = null, bool $close = false): bool
+    private function setUserData(string $loginName, bool $close = true): bool
     {
-        // Get user
-        $this->userData = $this->soap->getMailUser($loginName);
+        if ($this->userData === null) {
+            try {
+                // Get user
+                $userData = $this->soap->getMailUser($loginName);
 
-        // Check if this user can login ('y' or 'n')
-        if (!isset($this->userData['nc_enabled']) ||
-            $this->userData['nc_enabled'] != 'y' ||
-            ($password !== null && password_verify($password, $this->userData['password']) === false)) {
-            $this->soap->close();
-            return false;
-        }
+                // Check if this user can login ('y' or 'n')
+                if (!isset($userData['nc_enabled']) || $userData['nc_enabled'] != 'y') {
+                    throw new Exception('User can not login.');
+                }
 
-        // Split the email in user and domain
-        $parts = BackendHelper::splitEmail($this->userData['email']);
+                // Check if this server can login
+                $serverData = $this->soap->getServerConf($userData['server_id']);
 
-        $this->domainData = $this->soap->getMailDomain($parts['domain']);
+                if (!isset($serverData['nc_enabled']) || $serverData['nc_enabled'] != 'y') {
+                    throw new Exception('Server can not login.');
+                }
 
-        // Check if this domain can login
-        if (!isset($this->domainData['nc_enabled']) || $this->domainData['nc_enabled'] != 'y') {
-            $this->soap->close();
-            return false;
-        }
+                // Split the email in user and domain
+                $parts = BackendHelper::splitEmail($userData['email']);
 
-        if ($close) {
-            $this->soap->close();
-        }
+                if (!$parts) {
+                    throw new Exception('Invalid user email.');
+                }
 
-        $this->mailUser = $parts['user'];
-        $this->mailDomain = $parts['domain'];
-        $this->mailUid = BackendHelper::computeUID(
-            $this->mailUser . '.' . $this->mailDomain,
-            self::MAX_UID_LENGTH
-        );
+                $domainData = $this->soap->getMailDomain($parts['domain']);
 
-        return true;
-    }
+                // Close the connection
+                if ($close) {
+                    $this->soap->close();
+                }
 
-    /**
-     * Query the API and set the domain data
-     *
-     * @param bool $close
-     *
-     * @return bool
-     */
-    private function setDomainData(bool $close = false): bool
-    {
-        if ($this->userData) {
-            $this->domainData = $this->soap->getMailDomain($this->mailDomain);
+                // Check if this domain can login
+                if (!isset($domainData['nc_enabled']) || $domainData['nc_enabled'] != 'y') {
+                    throw new Exception('Domain can not login.');
+                }
 
-            // Check if this domain can login
-            if (!isset($this->domainData['nc_enabled']) || $this->domainData['nc_enabled'] != 'y') {
+                $this->loginName = $loginName;
+                $this->userData = $userData;
+                $this->serverData = $serverData;
+                $this->domainData = $domainData;
+                $this->mailUser = $parts['user'];
+                $this->mailDomain = $parts['domain'];
+                $this->uid = BackendHelper::computeUID(
+                    $parts['user'] . '.' . $parts['domain'],
+                    self::MAX_UID_LENGTH
+                );
+            } catch (Exception $e) {
                 $this->soap->close();
-                return false;
-            }
-
-            if ($close) {
-                $this->soap->close();
+                $this->userData = [];
+                $this->logger->debug('User loading failed: ' . $e->getMessage(), ['app' => 'user_ispconfig_api']);
             }
         }
 
-        return true;
-    }
-
-    /**
-     * Query the API and set the server data
-     *
-     * @param bool $close
-     *
-     * @return bool
-     */
-    private function setServerData(bool $close = false): bool
-    {
-        if ($this->userData) {
-            $this->serverData = $this->soap->getServerConf($this->userData['server_id']);
-
-            if (empty($this->serverData)) {
-                $this->soap->close();
-                return false;
-            }
-
-            if ($close) {
-                $this->soap->close();
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Query the API and get the client id
-     *
-     * @param bool $close
-     *
-     * @return int
-     */
-    private function getClientId(bool $close = false): int
-    {
-        $clientId = 0;
-
-        if ($this->userData) {
-            $clientId = $this->soap->getClientId($this->userData['sys_userid']);
-
-            if (!$clientId) {
-                $close = true;
-            }
-
-            if ($close) {
-                $this->soap->close();
-            }
-        }
-
-        return $clientId;
+        return (bool) $this->userData;
     }
 
     /**
@@ -537,7 +491,7 @@ class UserBackend extends ABackend implements
         $uid = (string) $uid;
         $this->loadUser($uid);
 
-        return $this->cache[$uid]['displayname'];
+        return empty($this->cache[$uid]['displayname']) ? $uid : $this->cache[$uid]['displayname'];
     }
 
     /**
@@ -609,33 +563,35 @@ class UserBackend extends ABackend implements
      */
     public function setDisplayName(string $uid, string $displayName): bool
     {
+        $response = false;
         $displayName = BackendHelper::computeName($displayName, self::MAX_NAME_LENGTH);
 
         if ($displayName !== '' && $this->userExists($uid)) {
             $email = $this->cache[$uid]['mailuser'] . '@' . $this->cache[$uid]['maildomain'];
 
-            if ($this->setUserData($email)) {
-                $query = $this->db->getQueryBuilder();
-                $query->update('ispconfig_api_users')
-                    ->set('displayname', $query->createNamedParameter($displayName))
-                    ->where($query->expr()->eq('uid', $query->createNamedParameter(mb_strtolower($uid))));
-                $query->execute();
-
-                $this->cache[$uid]['displayname'] = $displayName;
-
-                $clientId = $this->getClientId();
-
-                if ($clientId) {
-                    $this->soap->updateMailUser($clientId, $this->userData['mailuser_id'], ['name' => $displayName]);
-                }
-
+            // Load user
+            if ($this->setUserData($email, false)) {
+                // API call is more likely to fail. Try this first.
+                $response = $this->soap->updateMailUser(
+                    $this->userData['sys_userid'],
+                    $this->userData['mailuser_id'],
+                    ['name' => $displayName]
+                );
                 $this->soap->close();
-            }
 
-            return true;
+                if ($response) {
+                    $query = $this->db->getQueryBuilder();
+                    $query->update('ispconfig_api_users')
+                        ->set('displayname', $query->createNamedParameter($displayName))
+                        ->where($query->expr()->eq('uid', $query->createNamedParameter(mb_strtolower($uid))));
+                    $query->execute();
+
+                    $this->cache[$uid]['displayname'] = $displayName;
+                }
+            }
         }
 
-        return false;
+        return $response;
     }
 
     /**
@@ -650,13 +606,14 @@ class UserBackend extends ABackend implements
             $this->eventDispatcher->dispatchTyped(new ValidatePasswordPolicyEvent($password));
 
             $email = $this->cache[$uid]['mailuser'] . '@' . $this->cache[$uid]['maildomain'];
-            if ($this->setUserData($email)) {
-                $clientId = $this->getClientId();
 
-                if ($clientId) {
-                    $response = $this->soap->updateMailUser($clientId, $this->userData['mailuser_id'], ['password' => $password]);
-                }
-
+            // Load user
+            if ($this->setUserData($email, false)) {
+                $response = $this->soap->updateMailUser(
+                    $this->userData['sys_userid'],
+                    $this->userData['mailuser_id'],
+                    ['password' => $password]
+                );
                 $this->soap->close();
             }
         }
@@ -746,32 +703,6 @@ class UserBackend extends ABackend implements
     }
 
     /**
-     * Convert the login name to uid
-     *
-     * @param $param
-     *
-     * @return void
-     * @throws \Throwable
-     */
-    public static function preLoginNameUsedAsUserName($param): void
-    {
-        if (!isset($param['uid'])) {
-            throw new \Exception('key uid is expected to be set in $param');
-        }
-
-        $backends = Server::get(IUserManager::class)->getBackends();
-        foreach ($backends as $backend) {
-            if ($backend instanceof UserBackend) {
-                $uid = $backend->loginName2UserName($param['uid']);
-                if ($uid !== false) {
-                    $param['uid'] = $uid;
-                    break;
-                }
-            }
-        }
-    }
-
-    /**
      * Returns the username for the given login name
      *
      * @param string $loginName
@@ -781,14 +712,44 @@ class UserBackend extends ABackend implements
      */
     public function loginName2UserName(string $loginName): bool|string
     {
-        // Set the user data and the domain data (validate if user can login)
-        if ($this->setUserData($loginName, null, true)) {
-            if ($this->userExists($this->mailUid)) {
-                return $this->cache[$this->mailUid]['uid'];
+        if ($this->setUserData($loginName)) {
+            $this->fixUID($loginName);
+
+            if ($this->userExists($loginName)) {
+                return $this->cache[$loginName]['uid'];
             }
         }
 
         return false;
+    }
+
+    /**
+     * @inheritDoc
+     * @throws \Throwable
+     */
+    public function getRealUID(string $uid): string
+    {
+        $this->fixUID($uid);
+
+        if (!$this->userExists($uid)) {
+            throw new \RuntimeException($uid . ' does not exist');
+        }
+
+        return $this->cache[$uid]['uid'];
+    }
+
+    /**
+     * Get the real UID
+     *
+     * @param string $uid
+     *
+     * @return void
+     */
+    private function fixUID(string &$uid): void
+    {
+        if ($this->loginName && $uid === $this->loginName) {
+            $uid = $this->uid;
+        }
     }
 
     /**

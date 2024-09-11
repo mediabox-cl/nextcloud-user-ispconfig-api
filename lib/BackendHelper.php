@@ -25,6 +25,8 @@ declare(strict_types=1);
 
 namespace OCA\UserISPConfigAPI;
 
+use OCP\Server;
+
 class BackendHelper
 {
     /**
@@ -75,12 +77,13 @@ class BackendHelper
      * Split an email
      *
      * @param string $email
+     * @param bool $lower
      *
      * @return array
      */
-    public static function splitEmail(string $email): array
+    public static function splitEmail(string $email, bool $lower = true): array
     {
-        $email = self::isEmail($email);
+        $email = self::isEmail($email, $lower);
 
         if ($email) {
             $parts = explode('@', $email);
@@ -118,5 +121,27 @@ class BackendHelper
         }
 
         return filter_var($email, FILTER_VALIDATE_EMAIL);
+    }
+
+    /**
+     * Listens to a hook thrown by server2server sharing and replaces the given
+     * login name by a username, if it matches an API user.
+     *
+     * @param $param
+     *
+     * @return void
+     * @throws \Throwable
+     */
+    public static function preLoginNameUsedAsUserName($param): void
+    {
+        if (!isset($param['uid'])) {
+            throw new \Exception('key uid is expected to be set in $param');
+        }
+
+        $userBackend = Server::get(UserBackend::class);
+        $uid = $userBackend->loginName2UserName($param['uid']);
+        if ($uid !== false) {
+            $param['uid'] = $uid;
+        }
     }
 }

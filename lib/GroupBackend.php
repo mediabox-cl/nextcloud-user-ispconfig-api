@@ -96,11 +96,9 @@ class GroupBackend extends ABackend implements
     private $groups = [];
 
     /**
-     * @param SOAP $soap
      * @param IDBConnection $db
      */
     public function __construct(
-        private SOAP          $soap,
         private IDBConnection $db
     )
     {

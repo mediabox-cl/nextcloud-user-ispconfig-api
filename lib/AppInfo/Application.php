@@ -65,7 +65,7 @@ class Application extends App implements IBootstrap
         OC_Hook::connect(
             '\OCA\Files_Sharing\API\Server2Server',
             'preLoginNameUsedAsUserName',
-            '\OCA\UserISPConfigAPI\UserBackend',
+            '\OCA\UserISPConfigAPI\BackendHelper',
             'preLoginNameUsedAsUserName'
         );
     }
