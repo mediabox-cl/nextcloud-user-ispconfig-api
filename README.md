@@ -41,7 +41,8 @@ Clone this repository into your **Nextcloud** apps directory:
 
 ```bash
 cd /var/www/nextcloud/site/apps/
-sudo -u www-data git clone https://github.com/mediabox-cl/nextcloud-user-ispconfig-api.git user_ispconfig_api
+git clone https://github.com/mediabox-cl/nextcloud-user-ispconfig-api.git user_ispconfig_api
+chown -R www-data:www-data user_ispconfig_api
 ```
 Install it as usual from admin app list or CLI with:
 
@@ -59,13 +60,15 @@ Update the cloned repository in your **Nextcloud** apps directory:
 
 ```bash
 cd /var/www/nextcloud/site/apps/user_ispconfig_api
-sudo -u www-data git pull
+git pull
+cd ..
+chown -R www-data:www-data user_ispconfig_api
 ```
 
 Update the **Nextcloud** APP:
 
 ```bash
-cd /var/www/nextcloud/site
+cd ..
 sudo -u www-data php occ upgrade
 ```
 
