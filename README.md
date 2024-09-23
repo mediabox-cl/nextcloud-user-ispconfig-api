@@ -33,7 +33,9 @@ For a user with this email `user@happy.tld` and **Nextcloud** running in the sub
 
 ### Automatic installation (recommended)
 
-~~Just install it from your Nextcloud application catalogue.~~ Not available (yet)
+Just install it from your Nextcloud application catalogue.
+- Search for ISPConfig API Backend.
+- Select, install and enable the APP.
 
 ### Manual installation
 
