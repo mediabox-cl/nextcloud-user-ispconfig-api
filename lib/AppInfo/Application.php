@@ -58,8 +58,19 @@ class Application extends App implements IBootstrap
             IGroupManager $groupManager,
             GroupBackend  $groupBackend
         ) {
+            $userBackends = $userManager->getBackends();
+            $userManager->clearBackends();
             $userManager->registerBackend($userBackend);
+            foreach ($userBackends as $backend) {
+                $userManager->registerBackend($backend);
+            }
+
+            $groupBackends = $groupManager->getBackends();
+            $groupManager->clearBackends();
             $groupManager->addBackend($groupBackend);
+            foreach ($groupBackends as $backend) {
+                $groupManager->addBackend($backend);
+            }
         });
 
         OC_Hook::connect(

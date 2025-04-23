@@ -171,10 +171,10 @@ class GroupBackend extends ABackend implements
         // check
         $qb = $this->db->getQueryBuilder();
         $cursor = $qb->select('uid')
-            ->from('group_user')
+            ->from('ispconfig_api_group_user')
             ->where($qb->expr()->eq('gid', $qb->createNamedParameter(mb_strtolower($gid))))
             ->andWhere($qb->expr()->eq('uid', $qb->createNamedParameter(mb_strtolower($uid))))
-            ->execute();
+            ->executeQuery();
 
         $result = $cursor->fetch();
         $cursor->closeCursor();
@@ -191,10 +191,10 @@ class GroupBackend extends ABackend implements
         // No duplicate entries!
         if (!$this->inGroup($uid, $gid)) {
             $qb = $this->db->getQueryBuilder();
-            $qb->insert('group_user')
+            $qb->insert('ispconfig_api_group_user')
                 ->setValue('uid', $qb->createNamedParameter(mb_strtolower($uid)))
                 ->setValue('gid', $qb->createNamedParameter(mb_strtolower($gid)))
-                ->execute();
+                ->executeStatement();
             return true;
         } else {
             return false;
@@ -208,10 +208,10 @@ class GroupBackend extends ABackend implements
     public function removeFromGroup(string $uid, string $gid): bool
     {
         $qb = $this->db->getQueryBuilder();
-        $qb->delete('group_user')
+        $qb->delete('ispconfig_api_group_user')
             ->where($qb->expr()->eq('uid', $qb->createNamedParameter(mb_strtolower($uid))))
             ->andWhere($qb->expr()->eq('gid', $qb->createNamedParameter(mb_strtolower($gid))))
-            ->execute();
+            ->executeStatement();
 
         return true;
     }
@@ -230,10 +230,10 @@ class GroupBackend extends ABackend implements
         // No magic!
         $qb = $this->db->getQueryBuilder();
         $cursor = $qb->select('gu.gid', 'g.rid', 'g.sid', 'g.displayname')
-            ->from('group_user', 'gu')
+            ->from('ispconfig_api_group_user', 'gu')
             ->leftJoin('gu', 'ispconfig_api_groups', 'g', $qb->expr()->eq('gu.gid', 'g.gid'))
             ->where($qb->expr()->eq('uid', $qb->createNamedParameter(mb_strtolower($uid))))
-            ->execute();
+            ->executeQuery();
 
         $groups = [];
         while ($row = $cursor->fetch()) {
@@ -276,7 +276,7 @@ class GroupBackend extends ABackend implements
         if ($offset > 0) {
             $query->setFirstResult($offset);
         }
-        $result = $query->execute();
+        $result = $query->executeQuery();
 
         $groups = [];
         while ($row = $result->fetch()) {
@@ -314,7 +314,7 @@ class GroupBackend extends ABackend implements
                 ->from('ispconfig_api_groups')
                 ->where($qb->expr()->eq('gid', $qb->createNamedParameter(mb_strtolower($gid))));
 
-            $result = $qb->execute();
+            $result = $qb->executeQuery();
             $row = $result->fetch();
             $result->closeCursor();
 
@@ -402,13 +402,13 @@ class GroupBackend extends ABackend implements
         $query = $this->db->getQueryBuilder();
         $query->select($query->createFunction('COUNT(DISTINCT ' . $query->getColumnName('uid') . ')'))
             ->from('preferences', 'p')
-            ->innerJoin('p', 'group_user', 'g', $query->expr()->eq('p.userid', 'g.uid'))
+            ->innerJoin('p', 'ispconfig_api_group_user', 'g', $query->expr()->eq('p.userid', 'g.uid'))
             ->where($query->expr()->eq('appid', $query->createNamedParameter('core')))
             ->andWhere($query->expr()->eq('configkey', $query->createNamedParameter('enabled')))
             ->andWhere($query->expr()->eq('configvalue', $query->createNamedParameter('false'), IQueryBuilder::PARAM_STR))
             ->andWhere($query->expr()->eq('gid', $query->createNamedParameter(mb_strtolower($gid)), IQueryBuilder::PARAM_STR));
 
-        $result = $query->execute();
+        $result = $query->executeQuery();
         $count = $result->fetchOne();
         $result->closeCursor();
 
@@ -429,7 +429,7 @@ class GroupBackend extends ABackend implements
     {
         $query = $this->db->getQueryBuilder();
         $query->select($query->func()->count('*', 'num_users'))
-            ->from('group_user')
+            ->from('ispconfig_api_group_user')
             ->where($query->expr()->eq('gid', $query->createNamedParameter(mb_strtolower($gid))));
 
         if ($search !== '') {
@@ -438,7 +438,7 @@ class GroupBackend extends ABackend implements
             )));
         }
 
-        $result = $query->execute();
+        $result = $query->executeQuery();
         $count = $result->fetchOne();
         $result->closeCursor();
 
@@ -463,19 +463,19 @@ class GroupBackend extends ABackend implements
         $qb = $this->db->getQueryBuilder();
         $qb->delete('ispconfig_api_groups')
             ->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
-            ->execute();
+            ->executeStatement();
 
         // Delete the group-user relation
         $qb = $this->db->getQueryBuilder();
-        $qb->delete('group_user')
+        $qb->delete('ispconfig_api_group_user')
             ->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
-            ->execute();
+            ->executeStatement();
 
         // Delete the group-groupadmin relation
         $qb = $this->db->getQueryBuilder();
         $qb->delete('group_admin')
             ->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
-            ->execute();
+            ->executeStatement();
 
         // Delete from cache
         if (isset($this->cache[$gid])) {
@@ -561,7 +561,7 @@ class GroupBackend extends ABackend implements
         $query = $this->db->getQueryBuilder();
         $query->select('g.uid', 'u.displayname');
 
-        $query->from('group_user', 'g')
+        $query->from('ispconfig_api_group_user', 'g')
             ->where($query->expr()->eq('gid', $query->createNamedParameter(mb_strtolower($gid))))
             ->orderBy('g.uid', 'ASC');
 
@@ -616,7 +616,7 @@ class GroupBackend extends ABackend implements
             $query->update('ispconfig_api_groups')
                 ->set('displayname', $query->createNamedParameter($displayName))
                 ->where($query->expr()->eq('gid', $query->createNamedParameter(mb_strtolower($gid))));
-            $query->execute();
+            $query->executeStatement();
 
             $this->cache[$gid]['displayname'] = $displayName;
 

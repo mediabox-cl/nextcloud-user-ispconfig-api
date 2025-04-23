@@ -462,7 +462,7 @@ class UserBackend extends ABackend implements
                 ->from('ispconfig_api_users')
                 ->where($qb->expr()->eq('uid', $qb->createNamedParameter(mb_strtolower($uid))));
 
-            $result = $qb->execute();
+            $result = $qb->executeQuery();
             $row = $result->fetch();
             $result->closeCursor();
 
@@ -548,7 +548,7 @@ class UserBackend extends ABackend implements
             ->setMaxResults($limit)
             ->setFirstResult($offset);
 
-        $result = $query->execute();
+        $result = $query->executeQuery();
         $displayNames = [];
         while ($row = $result->fetch()) {
             $displayNames[(string) $row['uid']] = (string) $row['displayname'];
@@ -584,7 +584,7 @@ class UserBackend extends ABackend implements
                     $query->update('ispconfig_api_users')
                         ->set('displayname', $query->createNamedParameter($displayName))
                         ->where($query->expr()->eq('uid', $query->createNamedParameter(mb_strtolower($uid))));
-                    $query->execute();
+                    $query->executeStatement();
 
                     $this->cache[$uid]['displayname'] = $displayName;
                 }
@@ -631,7 +631,7 @@ class UserBackend extends ABackend implements
         $query = $this->db->getQueryBuilder();
         $query->delete('ispconfig_api_users')
             ->where($query->expr()->eq('uid', $query->createNamedParameter(mb_strtolower($uid))));
-        $result = $query->execute();
+        $result = $query->executeQuery();
 
         if (isset($this->cache[$uid])) {
             unset($this->cache[$uid]);
