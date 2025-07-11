@@ -631,7 +631,7 @@ class UserBackend extends ABackend implements
         $query = $this->db->getQueryBuilder();
         $query->delete('ispconfig_api_users')
             ->where($query->expr()->eq('uid', $query->createNamedParameter(mb_strtolower($uid))));
-        $result = $query->executeQuery();
+        $result = $query->executeStatement();
 
         if (isset($this->cache[$uid])) {
             unset($this->cache[$uid]);
