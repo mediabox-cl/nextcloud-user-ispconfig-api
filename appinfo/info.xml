@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
     <id>user_ispconfig_api</id>
-    <version>31.0.0</version>
+    <version>31.0.1</version>
     <name>ISPConfig API Backend</name>
     <summary>Allows users to log in with their email or custom username using the ISPConfig control panel API.</summary>
     <description lang="en"><![CDATA[These users and groups backend requires the installation of a plugin in the ISPConfig control panel. Please see the documentation on the official site.]]></description>
