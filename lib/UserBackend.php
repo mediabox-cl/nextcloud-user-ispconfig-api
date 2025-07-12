@@ -41,10 +41,10 @@ use OCP\Security\Events\ValidatePasswordPolicyEvent;
 use OCP\Server;
 use OCP\User\Backend\ABackend;
 use OCP\User\Backend\ICheckPasswordBackend;
-use OCP\User\Backend\ICountUsersBackend;
 use OCP\User\Backend\IGetDisplayNameBackend;
 use OCP\User\Backend\IGetHomeBackend;
 use OCP\User\Backend\IGetRealUIDBackend;
+use OCP\User\Backend\ILimitAwareCountUsersBackend;
 use OCP\User\Backend\ISearchKnownUsersBackend;
 use OCP\User\Backend\ISetDisplayNameBackend;
 use OCP\User\Backend\ISetPasswordBackend;
@@ -60,7 +60,7 @@ class UserBackend extends ABackend implements
     IGetDisplayNameBackend,
     ICheckPasswordBackend,
     IGetHomeBackend,
-    ICountUsersBackend,
+    ILimitAwareCountUsersBackend,
     ISearchKnownUsersBackend,
     IGetRealUIDBackend
 {
@@ -498,14 +498,15 @@ class UserBackend extends ABackend implements
      * @inheritDoc
      * @throws \Throwable
      */
-    public function countUsers()
+    public function countUsers(int $limit = 0): int|false
     {
         $query = $this->db->getQueryBuilder();
         $query->select($query->func()->count('uid'))
             ->from('ispconfig_api_users');
-        $result = $query->executeQuery();
 
-        return $result->fetchOne();
+        $result = $query->executeQuery()->fetchOne();
+
+        return $result === false ? false : (int) $result;
     }
 
     /**
